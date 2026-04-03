@@ -28,6 +28,7 @@ class AppMonitorService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
 
     private val blockedApps = listOf("com.instagram.android")
+    private var lastHeartbeatLog = 0L
 
     // --- Lifecycle ---
 
@@ -98,14 +99,27 @@ class AppMonitorService : Service() {
         monitoringJob?.cancel()
         monitoringJob = serviceScope.launch {
             while (isActive) {
+                val now = System.currentTimeMillis()
+                if (now - lastHeartbeatLog >= 5_000L) {
+                    Log.d(TAG, "MediaDetox - Still running, checking apps...")
+                    lastHeartbeatLog = now
+                }
+
                 val foregroundApp = getForegroundApp(this@AppMonitorService)
 
-                Log.d(TAG, "Foreground app: $foregroundApp")
+                if (foregroundApp != null) {
+                    Log.d(TAG, "MediaDetox - Current foreground: $foregroundApp")
+                }
 
-                if (foregroundApp in blockedApps && !OverlayActivity.isShowing) {
-                    Log.d(TAG, "INSTAGRAM DETECTED - firing overlay")
-                    triggerOverlay(foregroundApp!!)
-                    delay(3000L) // Wait 3 seconds before checking again
+                if (foregroundApp in blockedApps) {
+                    Log.d(TAG, "MediaDetox - INSTAGRAM DETECTED")
+                    if (!OverlayActivity.isShowing) {
+                        triggerOverlay(foregroundApp!!)
+                        delay(3000L) // Wait 3 seconds before checking again
+                    } else {
+                        Log.d(TAG, "MediaDetox - Overlay already showing, skipping")
+                        delay(500L)
+                    }
                 } else {
                     delay(500L) // Normal check interval
                 }
