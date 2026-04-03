@@ -1,7 +1,10 @@
 package com.mediadetox.app.overlay
 
+import android.animation.ArgbEvaluator
+import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -23,6 +26,7 @@ class OverlayActivity : AppCompatActivity() {
 
     private val handler = Handler(Looper.getMainLooper())
     private val holdRunnables = mutableListOf<Runnable>()
+    private var pulseAnimator: ObjectAnimator? = null
 
     private var blockedPackage: String? = null
 
@@ -33,7 +37,6 @@ class OverlayActivity : AppCompatActivity() {
 
     @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Full screen — must be set before setContentView
         window.setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
@@ -54,11 +57,13 @@ class OverlayActivity : AppCompatActivity() {
         loadStats()
         setupDmBypassButton()
         setupHoldUnlockButton()
+        playEntryAnimation()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         cancelHoldCountdown()
+        pulseAnimator?.cancel()
     }
 
     // --- Stats ---
@@ -78,6 +83,85 @@ class OverlayActivity : AppCompatActivity() {
             } else {
                 "No streak. Start one today."
             }
+        }
+    }
+
+    // --- Entry animation ---
+
+    private fun playEntryAnimation() {
+        // Title: invisible + scaled up slightly → fade in + scale to 1.0
+        binding.tvShameHeader.apply {
+            alpha = 0f
+            scaleX = 1.1f
+            scaleY = 1.1f
+        }
+
+        // Stats: invisible, will fade in after title
+        binding.tvOpenCount.alpha = 0f
+        binding.tvTimeWasted.alpha = 0f
+
+        // Buttons group: start 80dp below final position, invisible
+        val offsetPx = (80 * resources.displayMetrics.density).toInt().toFloat()
+        binding.btnDmBypass.apply { alpha = 0f; translationY = offsetPx }
+        binding.btnHoldUnlock.apply { alpha = 0f; translationY = offsetPx }
+        binding.tvUnlockHint.apply { alpha = 0f; translationY = offsetPx }
+
+        // Step 1: title fades in and scales down to 1.0 over 400ms
+        binding.tvShameHeader.animate()
+            .alpha(1f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(400)
+            .withEndAction {
+                // Step 2: stats fade in over 300ms, 200ms after title finishes
+                binding.tvOpenCount.animate()
+                    .alpha(1f)
+                    .setDuration(300)
+                    .start()
+                binding.tvTimeWasted.animate()
+                    .alpha(1f)
+                    .setDuration(300)
+                    .setStartDelay(80)
+                    .withEndAction {
+                        // Step 3: buttons slide up and fade in over 300ms
+                        binding.btnDmBypass.animate()
+                            .alpha(1f)
+                            .translationY(0f)
+                            .setDuration(300)
+                            .start()
+                        binding.btnHoldUnlock.animate()
+                            .alpha(1f)
+                            .translationY(0f)
+                            .setDuration(300)
+                            .setStartDelay(60)
+                            .withEndAction { startUnlockButtonPulse() }
+                            .start()
+                        binding.tvUnlockHint.animate()
+                            .alpha(1f)
+                            .translationY(0f)
+                            .setDuration(300)
+                            .setStartDelay(120)
+                            .start()
+                    }
+                    .start()
+            }
+            .start()
+    }
+
+    // --- Pulse animation on unlock button ---
+
+    private fun startUnlockButtonPulse() {
+        pulseAnimator = ObjectAnimator.ofArgb(
+            binding.btnHoldUnlock,
+            "textColor",
+            Color.parseColor("#FF3B30"),
+            Color.parseColor("#880000")
+        ).apply {
+            duration = 2_000
+            repeatCount = ObjectAnimator.INFINITE
+            repeatMode = ObjectAnimator.REVERSE
+            setEvaluator(ArgbEvaluator())
+            start()
         }
     }
 
@@ -112,6 +196,7 @@ class OverlayActivity : AppCompatActivity() {
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     cancelHoldCountdown()
                     binding.tvUnlockHint.text = "Hold for 3 seconds to unlock"
+                    shakeUnlockButton()
                     true
                 }
                 else -> false
@@ -138,15 +223,38 @@ class OverlayActivity : AppCompatActivity() {
         holdRunnables.clear()
     }
 
+    private fun shakeUnlockButton() {
+        binding.btnHoldUnlock.animate()
+            .translationX(16f).setDuration(50)
+            .withEndAction {
+                binding.btnHoldUnlock.animate()
+                    .translationX(-16f).setDuration(50)
+                    .withEndAction {
+                        binding.btnHoldUnlock.animate()
+                            .translationX(0f).setDuration(50)
+                            .start()
+                    }.start()
+            }.start()
+    }
+
     private fun onHoldComplete() {
         lifecycleScope.launch {
             repository.logCaved(blockedPackage ?: INSTAGRAM_PACKAGE)
         }
-        val launchIntent = packageManager.getLaunchIntentForPackage(INSTAGRAM_PACKAGE)
-        if (launchIntent != null) {
-            startActivity(launchIntent)
-        }
-        finish()
+        shameFlashThenLaunch()
+    }
+
+    // --- Shame flash ---
+
+    private fun shameFlashThenLaunch() {
+        binding.root.setBackgroundColor(Color.parseColor("#FF3B30"))
+        handler.postDelayed({
+            val launchIntent = packageManager.getLaunchIntentForPackage(INSTAGRAM_PACKAGE)
+            if (launchIntent != null) {
+                startActivity(launchIntent)
+            }
+            finish()
+        }, 200)
     }
 
     // --- Back button — go home, not back to Instagram ---
