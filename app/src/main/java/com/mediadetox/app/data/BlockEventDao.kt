@@ -21,4 +21,7 @@ interface BlockEventDao {
 
     @Query("SELECT COUNT(*) FROM block_events WHERE eventType = 'CAVED' AND timestamp >= :startOfDay")
     suspend fun countCavedToday(startOfDay: Long): Int
+
+    @Query("SELECT COUNT(*) FROM block_events WHERE eventType = 'CAVED' AND timestamp >= :start AND timestamp < :end")
+    suspend fun countCavedBetween(start: Long, end: Long): Int
 }

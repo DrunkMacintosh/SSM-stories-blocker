@@ -40,6 +40,29 @@ class BlockRepository(private val db: AppDatabase) {
         dao.countCavedToday(startOfToday())
     }
 
+    /** Returns how many consecutive days (including today) had zero CAVED events. */
+    suspend fun getCurrentStreak(): Int = withContext(Dispatchers.IO) {
+        var streak = 0
+        val dayMs = 24 * 60 * 60 * 1000L
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        for (i in 0..29) {
+            val dayStart = cal.timeInMillis
+            val dayEnd = dayStart + dayMs
+            if (dao.countCavedBetween(dayStart, dayEnd) == 0) {
+                streak++
+                cal.add(Calendar.DAY_OF_YEAR, -1)
+            } else {
+                break
+            }
+        }
+        streak
+    }
+
     // --- Time helpers ---
 
     private fun startOfToday(): Long {
