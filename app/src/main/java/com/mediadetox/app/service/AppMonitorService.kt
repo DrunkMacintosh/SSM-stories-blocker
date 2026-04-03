@@ -1,5 +1,6 @@
 package com.mediadetox.app.service
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -7,6 +8,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.mediadetox.app.overlay.OverlayActivity
@@ -22,7 +24,8 @@ class AppMonitorService : Service() {
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
-    private var monitorJob: Job? = null
+    private var monitoringJob: Job? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     private val blockedApps = listOf("com.instagram.android")
 
@@ -31,11 +34,24 @@ class AppMonitorService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // MUST be first — Android 12+ kills service if startForeground not called within 5s
+        createNotificationChannel()
+        startForeground(NOTIFICATION_ID, buildNotification())
+
         when (intent?.action) {
             ACTION_START -> {
                 Log.d(TAG, "Service started")
-                startForegroundWithNotification()
-                startMonitorLoop()
+
+                // Prevent Samsung from killing service
+                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                wakeLock = pm.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "MediaDetox::MonitorWakeLock"
+                )
+                @Suppress("WakelockTimeout")
+                wakeLock?.acquire(10 * 60 * 1000L) // 10 minutes max
+
+                startMonitoring()
                 isRunning = true
             }
             ACTION_STOP -> {
@@ -47,69 +63,89 @@ class AppMonitorService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        releaseWakeLock()
         serviceJob.cancel()
     }
 
-    // --- Foreground notification ---
+    // --- Notification ---
 
-    private fun startForegroundWithNotification() {
-        val channelId = CHANNEL_ID
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        if (manager.getNotificationChannel(channelId) == null) {
-            val channel = NotificationChannel(
-                channelId,
-                "Media Detox is active",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            manager.createNotificationChannel(channel)
+    private fun createNotificationChannel() {
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Media Detox Active",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Monitoring for Instagram"
+            setShowBadge(false)
         }
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
+    }
 
-        val notification = NotificationCompat.Builder(this, channelId)
+    private fun buildNotification(): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Media Detox")
             .setContentText("Protecting you from the feed")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setOngoing(true)
+            .setSilent(true)
             .build()
-
-        startForeground(NOTIFICATION_ID, notification)
     }
 
     // --- Monitor loop ---
 
-    private fun startMonitorLoop() {
-        monitorJob?.cancel()
-        monitorJob = serviceScope.launch {
+    private fun startMonitoring() {
+        monitoringJob?.cancel()
+        monitoringJob = serviceScope.launch {
             while (isActive) {
-                val foreground = getForegroundApp(this@AppMonitorService)
-                if (foreground != null && foreground in blockedApps) {
-                    if (!OverlayActivity.isShowing) {
-                        Log.d(TAG, "Instagram detected - triggering overlay")
-                        triggerOverlay(foreground)
-                    }
-                    delay(2_000)
+                val foregroundApp = getForegroundApp(this@AppMonitorService)
+
+                Log.d(TAG, "Foreground app: $foregroundApp")
+
+                if (foregroundApp in blockedApps && !OverlayActivity.isShowing) {
+                    Log.d(TAG, "INSTAGRAM DETECTED - firing overlay")
+                    triggerOverlay(foregroundApp!!)
+                    delay(3000L) // Wait 3 seconds before checking again
                 } else {
-                    delay(500)
+                    delay(500L) // Normal check interval
                 }
             }
         }
     }
 
     private fun stopMonitor() {
-        monitorJob?.cancel()
-        monitorJob = null
+        monitoringJob?.cancel()
+        monitoringJob = null
         isRunning = false
+        releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun releaseWakeLock() {
+        if (wakeLock?.isHeld == true) {
+            wakeLock?.release()
+        }
+        wakeLock = null
     }
 
     // --- Usage stats ---
 
     private fun getForegroundApp(context: Context): String? {
-        val usm = context.getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
-        val now = System.currentTimeMillis()
-        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 10_000, now)
+        val usageStatsManager = context.getSystemService(
+            Context.USAGE_STATS_SERVICE
+        ) as UsageStatsManager
+
+        val time = System.currentTimeMillis()
+        val stats = usageStatsManager.queryUsageStats(
+            UsageStatsManager.INTERVAL_DAILY,
+            time - 1000 * 10,
+            time
+        )
+
         return stats
-            ?.filter { it.lastTimeUsed > 0 }
+            ?.filter { it.packageName != packageName }
+            ?.filter { it.packageName != "com.mediadetox.app" }
             ?.maxByOrNull { it.lastTimeUsed }
             ?.packageName
     }
