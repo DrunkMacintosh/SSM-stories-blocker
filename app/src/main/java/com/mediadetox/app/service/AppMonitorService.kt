@@ -29,7 +29,8 @@ class AppMonitorService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
 
     private val blockedApps = listOf("com.instagram.android")
-    private var lastHeartbeatLog = 0L
+    private var lastBlockedTime: Long = 0
+    private val COOLDOWN_MS = 1500L
 
     // --- Lifecycle ---
 
@@ -106,33 +107,36 @@ class AppMonitorService : Service() {
     // --- Monitor loop ---
 
     private fun startMonitoring() {
-        monitoringJob?.cancel()
         monitoringJob = serviceScope.launch {
+            var previousApp = ""
+
             while (isActive) {
+                val currentApp = getForegroundApp(
+                    this@AppMonitorService
+                ) ?: ""
+
+                Log.d(TAG, "Foreground: $currentApp")
+
                 val now = System.currentTimeMillis()
-                if (now - lastHeartbeatLog >= 5_000L) {
-                    Log.d(TAG, "MediaDetox - Still running, checking apps...")
-                    lastHeartbeatLog = now
+                val cooldownExpired = (now - lastBlockedTime) > COOLDOWN_MS
+
+                // Trigger if:
+                // 1. Current app is Instagram
+                // 2. Overlay is not already showing
+                // 3. Cooldown has expired
+                // 4. App just came to foreground
+                //    (previousApp was different OR cooldown expired regardless)
+                if (currentApp in blockedApps
+                    && !OverlayActivity.isShowing
+                    && cooldownExpired
+                ) {
+                    Log.d(TAG, "INSTAGRAM DETECTED - firing overlay")
+                    lastBlockedTime = now
+                    triggerOverlay(currentApp)
                 }
 
-                val foregroundApp = getForegroundApp(this@AppMonitorService)
-
-                if (foregroundApp != null) {
-                    Log.d(TAG, "MediaDetox - Current foreground: $foregroundApp")
-                }
-
-                if (foregroundApp in blockedApps) {
-                    Log.d(TAG, "MediaDetox - INSTAGRAM DETECTED")
-                    if (!OverlayActivity.isShowing) {
-                        triggerOverlay(foregroundApp!!)
-                        delay(3000L) // Wait 3 seconds before checking again
-                    } else {
-                        Log.d(TAG, "MediaDetox - Overlay already showing, skipping")
-                        delay(500L)
-                    }
-                } else {
-                    delay(500L) // Normal check interval
-                }
+                previousApp = currentApp
+                delay(500L)
             }
         }
     }
@@ -176,24 +180,27 @@ class AppMonitorService : Service() {
             Context.USAGE_STATS_SERVICE
         ) as UsageStatsManager
 
-        val time = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+
+        // Use a 3-second window instead of 10 seconds
+        // This is more accurate for detecting app switches
         val stats = usageStatsManager.queryUsageStats(
             UsageStatsManager.INTERVAL_DAILY,
-            time - 10000,
-            time
+            now - 3000,
+            now
         )
 
         if (stats.isNullOrEmpty()) {
-            Log.w("MediaDetox", "Usage stats empty - permission may be denied")
+            Log.w("MediaDetox", "Usage stats empty")
             return null
         }
 
         val result = stats
             .filter { it.packageName != "com.mediadetox.app" }
+            .filter { it.lastTimeUsed > 0 }
             .maxByOrNull { it.lastTimeUsed }
             ?.packageName
 
-        Log.d("MediaDetox", "Foreground app detected: $result")
         return result
     }
 

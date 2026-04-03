@@ -59,7 +59,7 @@ class OverlayActivity : AppCompatActivity() {
 
         super.onCreate(savedInstanceState)
         isShowing = true
-        Log.d(TAG, "MediaDetox - Overlay opened")
+        Log.d(TAG, "Overlay opened - isShowing=true")
         binding = ActivityOverlayBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -82,13 +82,19 @@ class OverlayActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        Log.d(TAG, "MediaDetox - Overlay paused")
+        // If overlay loses focus (user went home),
+        // reset the flag so it can fire again
+        if (!isFinishing) {
+            isShowing = false
+            Log.d(TAG, "Overlay paused - isShowing=false")
+            finish()
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         isShowing = false
-        Log.d(TAG, "MediaDetox - Overlay destroyed")
+        Log.d(TAG, "Overlay destroyed - isShowing=false")
         cancelHoldCountdown()
         pulseAnimator?.cancel()
     }
