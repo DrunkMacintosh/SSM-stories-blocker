@@ -1,9 +1,17 @@
 package com.mediadetox.app.ui
 
+import android.app.ActivityManager
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import android.view.View
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.mediadetox.app.databinding.ActivityMainBinding
 import com.mediadetox.app.service.AppMonitorService
 import com.mediadetox.app.util.BatteryOptimizationHelper
@@ -46,9 +54,19 @@ class MainActivity : AppCompatActivity() {
         binding.switchMonitoring.setOnCheckedChangeListener { _, isChecked ->
             PrefsHelper.setMonitoringEnabled(this, isChecked)
             if (isChecked) {
-                AppMonitorService.start(this)
+                ContextCompat.startForegroundService(
+                    this,
+                    Intent(this, AppMonitorService::class.java).apply {
+                        action = AppMonitorService.ACTION_START
+                    }
+                )
+                verifyServiceStarted()
             } else {
-                AppMonitorService.stop(this)
+                startService(
+                    Intent(this, AppMonitorService::class.java).apply {
+                        action = AppMonitorService.ACTION_STOP
+                    }
+                )
             }
             updateProtectionStatus(isChecked)
         }
@@ -120,6 +138,36 @@ class MainActivity : AppCompatActivity() {
                 }
                 .show()
         }
+    }
+
+    private fun verifyServiceStarted() {
+        Handler(Looper.getMainLooper()).postDelayed({
+            val manager = getSystemService(
+                Context.ACTIVITY_SERVICE
+            ) as ActivityManager
+
+            val running = manager.getRunningServices(100)
+                .any { it.service.className ==
+                    AppMonitorService::class.java.name }
+
+            Log.d("MediaDetox", "Service running: $running")
+
+            if (!running) {
+                Log.e("MediaDetox", "SERVICE FAILED TO START")
+                Toast.makeText(
+                    this,
+                    "Service failed to start - check permissions",
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                Log.d("MediaDetox", "SERVICE IS ALIVE")
+                Toast.makeText(
+                    this,
+                    "Protection active",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }, 2000L)
     }
 
     private fun updateProtectionStatus(enabled: Boolean) {

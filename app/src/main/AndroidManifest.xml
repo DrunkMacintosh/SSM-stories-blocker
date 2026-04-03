@@ -38,8 +38,9 @@
 
         <service
             android:name=".service.AppMonitorService"
-            android:foregroundServiceType="specialUse"
+            android:enabled="true"
             android:exported="false"
+            android:foregroundServiceType="specialUse"
             android:stopWithTask="false" />
 
         <receiver
