@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.mediadetox.app.databinding.ActivityMainBinding
+import com.mediadetox.app.service.AppMonitorService
+import com.mediadetox.app.util.PrefsHelper
 
 class MainActivity : AppCompatActivity() {
 
@@ -14,12 +16,15 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         setupPermissionButtons()
+        setupMonitoringToggle()
     }
 
     override fun onResume() {
         super.onResume()
         refreshUI()
     }
+
+    // --- Permission setup ---
 
     private fun setupPermissionButtons() {
         binding.layoutPermissionSetup.btnGrantUsage.setOnClickListener {
@@ -32,6 +37,22 @@ class MainActivity : AppCompatActivity() {
             showDashboard()
         }
     }
+
+    // --- Monitoring toggle ---
+
+    private fun setupMonitoringToggle() {
+        binding.switchMonitoring.setOnCheckedChangeListener { _, isChecked ->
+            PrefsHelper.setMonitoringEnabled(this, isChecked)
+            if (isChecked) {
+                AppMonitorService.start(this)
+            } else {
+                AppMonitorService.stop(this)
+            }
+            updateProtectionStatus(isChecked)
+        }
+    }
+
+    // --- UI routing ---
 
     private fun refreshUI() {
         val hasUsage = PermissionHelper.hasUsageStatsPermission(this)
@@ -72,5 +93,22 @@ class MainActivity : AppCompatActivity() {
     private fun showDashboard() {
         binding.layoutPermissionSetup.root.visibility = View.GONE
         binding.layoutDashboard.visibility = View.VISIBLE
+
+        // Sync toggle state with persisted preference without firing the listener
+        val enabled = PrefsHelper.isMonitoringEnabled(this)
+        binding.switchMonitoring.setOnCheckedChangeListener(null)
+        binding.switchMonitoring.isChecked = enabled
+        setupMonitoringToggle()
+        updateProtectionStatus(enabled)
+    }
+
+    private fun updateProtectionStatus(enabled: Boolean) {
+        if (enabled) {
+            binding.textProtectionStatus.text = "Protection: ACTIVE"
+            binding.textProtectionStatus.setTextColor(0xFF4CAF50.toInt())
+        } else {
+            binding.textProtectionStatus.text = "Protection: OFF"
+            binding.textProtectionStatus.setTextColor(0xFFF44336.toInt())
+        }
     }
 }
