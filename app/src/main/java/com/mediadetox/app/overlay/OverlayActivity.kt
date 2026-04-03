@@ -67,6 +67,9 @@ class OverlayActivity : AppCompatActivity() {
         setupDmBypassButton()
         setupHoldUnlockButton()
         playEntryAnimation()
+
+        // Prevent activity from being finished by back stack animation
+        overridePendingTransition(0, 0)
     }
 
     override fun onDestroy() {
