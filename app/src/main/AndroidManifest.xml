@@ -34,7 +34,7 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:launchMode="singleInstance"
-            android:theme="@style/Theme.AppCompat.NoActionBar" />
+            android:theme="@style/Theme.MaterialComponents.NoActionBar" />
 
         <service
             android:name=".service.AppMonitorService"

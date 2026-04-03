@@ -40,25 +40,27 @@ class AppMonitorService : Service() {
         flags: Int,
         startId: Int
     ): Int {
-        Log.d("MediaDetox", "onStartCommand called - action: ${intent?.action}")
+        Log.d("MediaDetox", "onStartCommand - action: ${intent?.action}")
 
         createNotificationChannel()
         startForeground(1, buildNotification())
 
-        Log.d("MediaDetox", "Foreground started successfully")
+        Log.d("MediaDetox", "Foreground started")
 
         when (intent?.action) {
-            ACTION_START -> {
-                isRunning = true
-                Log.d("MediaDetox", "Starting monitoring loop")
-                startMonitoring()
-            }
             ACTION_STOP -> {
                 isRunning = false
-                Log.d("MediaDetox", "Stopping monitoring loop")
+                Log.d("MediaDetox", "Stopping service")
                 monitoringJob?.cancel()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
+            }
+            else -> {
+                // ACTION_START or null (system restart) — always start monitoring
+                isRunning = true
+                Log.d("MediaDetox", "Starting monitoring")
+                monitoringJob?.cancel() // cancel any existing
+                startMonitoring()
             }
         }
 
@@ -79,20 +81,25 @@ class AppMonitorService : Service() {
             "Media Detox Active",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Monitoring for Instagram"
+            description = "Keeps Media Detox running"
             setShowBadge(false)
+            setSound(null, null)
+            enableLights(false)
+            enableVibration(false)
         }
-        val manager = getSystemService(NotificationManager::class.java)
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Media Detox")
-            .setContentText("Protecting you from the feed")
+            .setContentText("Active")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .setOngoing(true)
             .setSilent(true)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .build()
     }
 
