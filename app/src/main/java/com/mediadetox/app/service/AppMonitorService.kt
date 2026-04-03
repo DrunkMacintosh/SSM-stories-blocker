@@ -20,7 +20,8 @@ import kotlinx.coroutines.launch
 
 class AppMonitorService : Service() {
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
     private var monitorJob: Job? = null
 
     private val blockedApps = listOf("com.instagram.android")
@@ -46,7 +47,7 @@ class AppMonitorService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        serviceScope.coroutineContext[SupervisorJob]?.cancel()
+        serviceJob.cancel()
     }
 
     // --- Foreground notification ---
