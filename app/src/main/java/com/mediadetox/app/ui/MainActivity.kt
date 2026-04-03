@@ -2,9 +2,11 @@ package com.mediadetox.app.ui
 
 import android.os.Bundle
 import android.view.View
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.mediadetox.app.databinding.ActivityMainBinding
 import com.mediadetox.app.service.AppMonitorService
+import com.mediadetox.app.util.BatteryOptimizationHelper
 import com.mediadetox.app.util.PrefsHelper
 
 class MainActivity : AppCompatActivity() {
@@ -100,6 +102,24 @@ class MainActivity : AppCompatActivity() {
         binding.switchMonitoring.isChecked = enabled
         setupMonitoringToggle()
         updateProtectionStatus(enabled)
+
+        checkBatteryOptimization()
+    }
+
+    private fun checkBatteryOptimization() {
+        if (!BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)) {
+            AlertDialog.Builder(this)
+                .setTitle("One more thing")
+                .setMessage(
+                    "Samsung will kill Media Detox in the background unless you disable " +
+                    "battery optimization for this app. This is required for it to work."
+                )
+                .setCancelable(false)
+                .setPositiveButton("Fix it now") { _, _ ->
+                    BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(this)
+                }
+                .show()
+        }
     }
 
     private fun updateProtectionStatus(enabled: Boolean) {

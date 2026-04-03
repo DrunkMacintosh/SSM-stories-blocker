@@ -7,6 +7,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.mediadetox.app.overlay.OverlayActivity
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +32,7 @@ class AppMonitorService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
+                Log.d(TAG, "Service started")
                 startForegroundWithNotification()
                 startMonitorLoop()
                 isRunning = true
@@ -79,6 +81,7 @@ class AppMonitorService : Service() {
             while (isActive) {
                 val foreground = getForegroundApp(this@AppMonitorService)
                 if (foreground != null && foreground in blockedApps) {
+                    Log.d(TAG, "Instagram detected - triggering overlay")
                     triggerOverlay(foreground)
                     delay(3_000)
                 } else {
@@ -125,6 +128,7 @@ class AppMonitorService : Service() {
         const val ACTION_STOP = "com.mediadetox.app.STOP"
         const val EXTRA_BLOCKED_PACKAGE = "blocked_package"
 
+        private const val TAG = "MediaDetox"
         private const val CHANNEL_ID = "media_detox_monitor"
         private const val NOTIFICATION_ID = 1001
 
