@@ -4,6 +4,7 @@ import android.animation.ArgbEvaluator
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.util.Log
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -31,6 +32,7 @@ class OverlayActivity : AppCompatActivity() {
     private var blockedPackage: String? = null
 
     companion object {
+        private const val TAG = "MediaDetox"
         private const val INSTAGRAM_PACKAGE = "com.instagram.android"
         private const val MINUTES_PER_OPEN = 3
 
@@ -57,6 +59,7 @@ class OverlayActivity : AppCompatActivity() {
 
         super.onCreate(savedInstanceState)
         isShowing = true
+        Log.d(TAG, "MediaDetox - Overlay opened")
         binding = ActivityOverlayBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -72,9 +75,20 @@ class OverlayActivity : AppCompatActivity() {
         overridePendingTransition(0, 0)
     }
 
+    override fun onResume() {
+        super.onResume()
+        Log.d(TAG, "MediaDetox - Overlay resumed")
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Log.d(TAG, "MediaDetox - Overlay paused")
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         isShowing = false
+        Log.d(TAG, "MediaDetox - Overlay destroyed")
         cancelHoldCountdown()
         pulseAnimator?.cancel()
     }
