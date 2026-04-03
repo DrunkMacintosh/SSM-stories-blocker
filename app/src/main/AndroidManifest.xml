@@ -27,6 +27,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".overlay.OverlayActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:showOnLockScreen="true"
+            android:theme="@style/Theme.MediaDetox" />
+
         <service
             android:name=".service.AppMonitorService"
             android:foregroundServiceType="specialUse"
