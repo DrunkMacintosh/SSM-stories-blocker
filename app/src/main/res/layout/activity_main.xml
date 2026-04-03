@@ -13,24 +13,31 @@
         android:visibility="gone" />
 
     <!-- Dashboard screen -->
-    <androidx.constraintlayout.widget.ConstraintLayout
+    <LinearLayout
         android:id="@+id/layoutDashboard"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
         android:visibility="gone">
 
-        <TextView
-            android:id="@+id/textDashboard"
+        <Switch
+            android:id="@+id/switchMonitoring"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Dashboard coming soon"
-            android:textSize="18sp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            android:text="Enable Protection"
+            android:textSize="20sp"
+            android:checked="false" />
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
+        <TextView
+            android:id="@+id/textProtectionStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Protection: OFF"
+            android:textSize="18sp" />
+
+    </LinearLayout>
 
 </FrameLayout>
