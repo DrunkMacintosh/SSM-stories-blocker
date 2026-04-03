@@ -82,9 +82,11 @@ class AppMonitorService : Service() {
             while (isActive) {
                 val foreground = getForegroundApp(this@AppMonitorService)
                 if (foreground != null && foreground in blockedApps) {
-                    Log.d(TAG, "Instagram detected - triggering overlay")
-                    triggerOverlay(foreground)
-                    delay(3_000)
+                    if (!OverlayActivity.isShowing) {
+                        Log.d(TAG, "Instagram detected - triggering overlay")
+                        triggerOverlay(foreground)
+                    }
+                    delay(2_000)
                 } else {
                     delay(500)
                 }
