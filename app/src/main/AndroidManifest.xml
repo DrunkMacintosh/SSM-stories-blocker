@@ -32,7 +32,7 @@
             android:name=".overlay.OverlayActivity"
             android:exported="false"
             android:excludeFromRecents="true"
-            android:showOnLockScreen="true"
+            android:launchMode="singleInstance"
             android:theme="@style/Theme.AppCompat.NoActionBar" />
 
         <service

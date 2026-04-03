@@ -33,6 +33,9 @@ class OverlayActivity : AppCompatActivity() {
     companion object {
         private const val INSTAGRAM_PACKAGE = "com.instagram.android"
         private const val MINUTES_PER_OPEN = 3
+
+        @Volatile
+        var isShowing: Boolean = false
     }
 
     @Suppress("DEPRECATION")
@@ -41,6 +44,11 @@ class OverlayActivity : AppCompatActivity() {
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         )
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        )
         window.decorView.systemUiVisibility = (
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                 or View.SYSTEM_UI_FLAG_FULLSCREEN
@@ -48,6 +56,7 @@ class OverlayActivity : AppCompatActivity() {
         )
 
         super.onCreate(savedInstanceState)
+        isShowing = true
         binding = ActivityOverlayBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -62,6 +71,7 @@ class OverlayActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isShowing = false
         cancelHoldCountdown()
         pulseAnimator?.cancel()
     }
