@@ -1,5 +1,6 @@
 package com.mediadetox.app.service
 
+import android.app.AppOpsManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -34,31 +35,33 @@ class AppMonitorService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // MUST be first — Android 12+ kills service if startForeground not called within 5s
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int
+    ): Int {
+        Log.d("MediaDetox", "onStartCommand called - action: ${intent?.action}")
+
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification())
+        startForeground(1, buildNotification())
+
+        Log.d("MediaDetox", "Foreground started successfully")
 
         when (intent?.action) {
             ACTION_START -> {
-                Log.d(TAG, "Service started")
-
-                // Prevent Samsung from killing service
-                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-                wakeLock = pm.newWakeLock(
-                    PowerManager.PARTIAL_WAKE_LOCK,
-                    "MediaDetox::MonitorWakeLock"
-                )
-                @Suppress("WakelockTimeout")
-                wakeLock?.acquire(10 * 60 * 1000L) // 10 minutes max
-
-                startMonitoring()
                 isRunning = true
+                Log.d("MediaDetox", "Starting monitoring loop")
+                startMonitoring()
             }
             ACTION_STOP -> {
-                stopMonitor()
+                isRunning = false
+                Log.d("MediaDetox", "Stopping monitoring loop")
+                monitoringJob?.cancel()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
             }
         }
+
         return START_STICKY
     }
 
@@ -146,6 +149,22 @@ class AppMonitorService : Service() {
     // --- Usage stats ---
 
     private fun getForegroundApp(context: Context): String? {
+        // Check permission first
+        val appOps = context.getSystemService(
+            Context.APP_OPS_SERVICE
+        ) as AppOpsManager
+
+        val mode = appOps.checkOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.os.Process.myUid(),
+            context.packageName
+        )
+
+        if (mode != AppOpsManager.MODE_ALLOWED) {
+            Log.e("MediaDetox", "NO USAGE STATS PERMISSION")
+            return null
+        }
+
         val usageStatsManager = context.getSystemService(
             Context.USAGE_STATS_SERVICE
         ) as UsageStatsManager
@@ -153,15 +172,22 @@ class AppMonitorService : Service() {
         val time = System.currentTimeMillis()
         val stats = usageStatsManager.queryUsageStats(
             UsageStatsManager.INTERVAL_DAILY,
-            time - 1000 * 10,
+            time - 10000,
             time
         )
 
-        return stats
-            ?.filter { it.packageName != packageName }
-            ?.filter { it.packageName != "com.mediadetox.app" }
-            ?.maxByOrNull { it.lastTimeUsed }
+        if (stats.isNullOrEmpty()) {
+            Log.w("MediaDetox", "Usage stats empty - permission may be denied")
+            return null
+        }
+
+        val result = stats
+            .filter { it.packageName != "com.mediadetox.app" }
+            .maxByOrNull { it.lastTimeUsed }
             ?.packageName
+
+        Log.d("MediaDetox", "Foreground app detected: $result")
+        return result
     }
 
     // --- Overlay trigger ---
